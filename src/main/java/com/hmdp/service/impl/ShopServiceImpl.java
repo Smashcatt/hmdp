@@ -33,12 +33,12 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     @Override
     public Result getShopById(Long id) {
         // 解决缓存穿透
-//        Shop shop = cacheClient.getSolvingCachePenetration(CACHE_SHOP_KEY, id, Shop.class, Long.class,
-//                this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
+        Shop shop = cacheClient.getSolvingCachePenetration(CACHE_SHOP_KEY, id, Shop.class, Long.class,
+                this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
 
         // 解决缓存击穿
-        Shop shop = cacheClient.getSolvingCacheBreakdown(CACHE_SHOP_KEY, LOCK_SHOP_KEY, id, Shop.class, Long.class,
-                this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
+//        Shop shop = cacheClient.getSolvingCacheBreakdown(CACHE_SHOP_KEY, LOCK_SHOP_KEY, id, Shop.class, Long.class,
+//                this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
         if(shop == null){
             return Result.fail("商铺不存在");
         }

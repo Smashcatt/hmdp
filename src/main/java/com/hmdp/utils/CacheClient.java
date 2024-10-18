@@ -55,11 +55,11 @@ public class CacheClient {
         if(StrUtil.isNotBlank(cacheJSON)){
             return JSONUtil.toBean(cacheJSON, resultType);
         }
-        // 3. 未命中缓存, 且缓存是"", 表示该数据根本不存在, 在数据库中也不存在的那种
+        // 3. 命中缓存, 且缓存是"", 表示该数据根本不存在, 在数据库中也不存在的那种
         if(cacheJSON != null){
             return null;
         }
-        // 4. 未命中缓存, 且缓存是null, 查数据库
+        // 4. 命中缓存, 且缓存是null, 查数据库
         // 我们不知道要查哪个数据库, 但调用者肯定知道, 所以我们把这个查数据库的逻辑交给调用者
         R r = dbFallBack.apply(id);
         // 5. 数据库中不存在该数据, 缓存空值, 然后返回null
