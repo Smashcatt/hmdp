@@ -63,7 +63,7 @@ public class UserController {
         UserInfo info = userInfoService.getById(userId);
         if (info == null) {
             // 没有详情，应该是第一次查看详情
-            return Result.ok();
+            return Result.ok("你妈的没有用户详情数据你要详情干什么");
         }
         info.setCreateTime(null);
         info.setUpdateTime(null);
