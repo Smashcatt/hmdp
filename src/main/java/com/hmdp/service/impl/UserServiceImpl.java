@@ -34,6 +34,17 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     private UserMapper userMapper;
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+
+    @Override
+    public Result getUserBasicInfo(Long id) {
+        User user = getById(id);
+        if(user == null){
+            return Result.ok();
+        }
+        UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
+        return Result.ok(userDTO);
+    }
+
     @Override
     public Result sendCode(String phone, HttpSession session) {
         // 1. Verify phone number

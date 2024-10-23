@@ -22,4 +22,9 @@ public class FollowController {
     public Result isSubscribed(@PathVariable("id") Long followUserId){
         return followService.isSubscribed(followUserId);
     }
+
+    @GetMapping("/common/{id}")
+    public Result commonFriends(@PathVariable("id") Long followUserId){
+        return followService.commonFriends(followUserId);
+    }
 }

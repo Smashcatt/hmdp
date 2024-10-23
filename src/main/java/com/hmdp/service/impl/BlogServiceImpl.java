@@ -10,25 +10,31 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hmdp.dto.Result;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.Blog;
+import com.hmdp.entity.Follow;
+import com.hmdp.entity.ScrollResult;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.BlogMapper;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IBlogService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.hmdp.service.IFollowService;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.SystemConstants;
 import com.hmdp.utils.UserHolder;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.hmdp.utils.RedisConstants.BLOG_LIKED_KEY;
+import static com.hmdp.utils.RedisConstants.FEED_KEY;
 
 /**
  * <p>
@@ -44,6 +50,87 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
     private IUserService userService;
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+    @Resource
+    private IFollowService followService;
+
+    @Override
+    public Result queryBlogOfFollowing(Long maxScore, Integer offset) {
+        String key = FEED_KEY + UserHolder.getUser().getId();
+
+        // 1. 获取本用户的收件箱中范围内的, 所有博客id及其score
+        Set<ZSetOperations.TypedTuple<String>> tuples = stringRedisTemplate.opsForZSet()
+                .reverseRangeByScoreWithScores(key, 0, maxScore, offset, 2);
+
+        // 2. 解析数据，获取范围内的所有博客id，获取最小score及其count
+        if(tuples == null || tuples.isEmpty()){
+            return Result.ok(Collections.emptyList());
+        }
+        List<Long> blogIdList = new ArrayList<>(tuples.size());
+        long minScore = 0;
+        int count = 1;
+        for (ZSetOperations.TypedTuple<String> tuple : tuples) {
+            blogIdList.add(Long.valueOf(tuple.getValue()));
+
+            long score = tuple.getScore().longValue();
+            if(score == minScore){
+                count++;
+            }else{
+                minScore = score;
+                count = 1;
+            }
+        }
+
+        // 3. 根据id查询博客，同时还要保证结果的顺序
+        String idListStr = StrUtil.join(",", blogIdList);
+        List<Blog> blogs = query()
+                .in("id", blogIdList).last("ORDER BY FIELD(id, " + idListStr + ")")
+                .list();
+        // 封装博客的用户和是否被点赞的信息
+        for (Blog blog : blogs) {
+            queryBlogUser(blog);
+            isBlogLiked(blog);
+        }
+
+        // 4. 封装并返回
+        ScrollResult scrollResult = new ScrollResult(blogs, minScore, count);
+        return Result.ok(scrollResult);
+    }
+
+    @Override
+    public Result saveBlog(Blog blog) {
+        // 1. 获取登录用户并封装
+        UserDTO user = UserHolder.getUser();
+        blog.setUserId(user.getId());
+        // 2. 保存博客进数据库
+        boolean isSuccess = save(blog);
+        if(isSuccess){
+            // 3. 将博客数据推送进粉丝的收件箱
+            // 3.1. 获取所有粉丝的id
+            List<Follow> follows = followService.list(new LambdaQueryWrapper<Follow>()
+                    .eq(Follow::getFollowUserId, user.getId()));
+            for (Follow follow : follows) {
+                // 3.2. 获取粉丝id
+                Long fansId = follow.getUserId();
+                // 3.3. 推送
+                String key = FEED_KEY + fansId;
+                stringRedisTemplate.opsForZSet()
+                        .add(key, blog.getId().toString(), System.currentTimeMillis());
+            }
+        }
+        // 4. 返回博客id
+        return Result.ok(blog.getId());
+    }
+
+    @Override
+    public Result queryBlogByUserId(Long id, Integer current) {
+        // 根据用户查询
+        Page<Blog> page = query()
+                .eq("user_id", id)
+                .page(new Page<>(current, SystemConstants.MAX_PAGE_SIZE));
+        // 获取当前页数据
+        List<Blog> records = page.getRecords();
+        return Result.ok(records);
+    }
 
     @Override
     public Result likeLeaderboard(Long id) {

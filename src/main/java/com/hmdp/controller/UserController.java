@@ -23,6 +23,11 @@ public class UserController {
     @Resource
     private IUserInfoService userInfoService;
 
+    @GetMapping("/{id}")
+    public Result getUserBasicInfo(@PathVariable("id") Long id){
+        return userService.getUserBasicInfo(id);
+    }
+
     /**
      * 发送手机验证码
      */
